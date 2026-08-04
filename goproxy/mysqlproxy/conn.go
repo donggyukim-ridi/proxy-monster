@@ -226,6 +226,14 @@ func (s *Server) handleConn(clientConn net.Conn) {
 				ProbeNamespace: func() (engine.NamespaceProbe, error) { return probeNamespaceObservation(backendConn, deprecateEOF) },
 				RunCommands:    refetcher.RunAll,
 			}, refetcher, nil, func(toSend string, masks []*pb.ColumnMask) (bool, error) {
+				// A client that sets character_set_results = NULL (Connector/J's default, so DBeaver's) asks
+				// the backend to return columns in their own charset, which would defeat the masker's UTF-8
+				// decoding and trip the session charset invariant. Pin it to utf8mb4 on the backend hop only —
+				// authorization and audit above saw the original statement. Only this exact case is rewritten;
+				// anything else still fails closed at the invariant guard.
+				if rewritten, ok := neutralizeResultsCharsetNULL(toSend); ok {
+					toSend = rewritten
+				}
 				queryPayload := mysqlwire.ComQueryPayload(toSend)
 				if len(queryPayload) >= maxPacketPayload {
 					if err := mysqlwire.WritePacket(clientConn, seq+1, mysqlwire.ErrPacketState(

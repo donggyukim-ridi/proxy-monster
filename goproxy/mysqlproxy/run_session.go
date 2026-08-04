@@ -60,6 +60,11 @@ func (s *RunSession) ServeStatement(sql string, maxRows int) (result engine.Stat
 		ProbeNamespace: func() (engine.NamespaceProbe, error) { return probeNamespaceObservation(s.conn, true) },
 		RunCommands:    s.ref.RunAll,
 	}, s.ref, s.guard, func(toSend string, masks []*pb.ColumnMask) (clean bool, runErr error) {
+		// Pin character_set_results = NULL to utf8mb4 on the backend hop (see neutralizeResultsCharsetNULL);
+		// editor results stay maskable and authorization/audit above saw the original statement.
+		if rewritten, ok := neutralizeResultsCharsetNULL(toSend); ok {
+			toSend = rewritten
+		}
 		payload := mysqlwire.ComQueryPayload(toSend)
 		if len(payload) >= mysqlwire.MaxPacketPayload {
 			return false, errors.New("query exceeds the maximum MySQL packet payload")

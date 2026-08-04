@@ -278,6 +278,15 @@ Fixes for gaps documented in
   fast-path, and similar features so a trusted datasource can opt in (denied
   today; MySQL and PostgreSQL binary-result relay is built). Each feature is a
   per-protocol implementation gated by a real-client end-to-end test.
+- Honor `character_set_results` instead of pinning it to UTF-8. Masking decodes
+  each result value as UTF-8, so the proxy requires the result charset to stay
+  UTF-8 and rewrites only a text-protocol `SET character_set_results = NULL`
+  (MySQL Connector/J's default) to `utf8mb4`; any other non-UTF-8 results
+  charset fails the session closed. To let a client receive results in each
+  column's own charset — or `NULL` for raw per-column bytes — make the row
+  masker charset-aware: decode each value by its column's result charset from
+  the field metadata, mask, and re-encode, and only then relax the UTF-8 session
+  invariant. See KNOWN_LIMITATIONS.md (Live namespace tracking).
 - Proxy-side cancel brokering: issue synthetic `BackendKeyData` and broker
   cancels proxy-side, so `CancelRequest` can require TLS without breaking psql's
   Ctrl-C.
