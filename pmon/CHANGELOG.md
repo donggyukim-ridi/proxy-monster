@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/ridi-oss/proxy-monster/compare/pmon-v0.1.2...pmon-v0.1.3) (2026-08-04)
+
+
+### Bug Fixes
+
+* **pmon:** advertise CONNECT_WITH_DB so JDBC/DBeaver clients connect ([4f08d55](https://github.com/ridi-oss/proxy-monster/commit/4f08d556e76e037d1e81ac94fdae6003fb757a7b))
+
 ## [0.1.2](https://github.com/ridi-oss/proxy-monster/compare/pmon-v0.1.1...pmon-v0.1.2) (2026-08-03)
 
 
