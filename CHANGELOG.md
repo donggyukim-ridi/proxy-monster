@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.7](https://github.com/ridi-oss/proxy-monster/compare/server-v0.1.6...server-v0.1.7) (2026-08-04)
+
+
+### Features
+
+* **web:** show each Cedar policy's source, collapsed behind a row toggle ([#86](https://github.com/ridi-oss/proxy-monster/issues/86)) ([168684a](https://github.com/ridi-oss/proxy-monster/commit/168684a4fbdf7045860fe1b6d0f39ab4ce4e93ff))
+
+
+### Bug Fixes
+
+* **analyzer:** adopt sqlglot-go v0.21.0 + harden the MySQL statement-coverage audit ([#89](https://github.com/ridi-oss/proxy-monster/issues/89)) ([9b8b02b](https://github.com/ridi-oss/proxy-monster/commit/9b8b02baf80affb4bed8d166882f9c0cb303d071))
+* **control-plane:** a tag is a tag ([#78](https://github.com/ridi-oss/proxy-monster/issues/78)) ([61cf6fd](https://github.com/ridi-oss/proxy-monster/commit/61cf6fd9ab1845e71c404dbad0eed559278cc9fa))
+* **cp:** reprint the seeded Cedar policy source ([#84](https://github.com/ridi-oss/proxy-monster/issues/84)) ([27cab70](https://github.com/ridi-oss/proxy-monster/commit/27cab70579989e34c30c15c6d15df399ad6ef8ba))
+* **goproxy:** use the shared printable scramble for the frontend greeting ([5f307b3](https://github.com/ridi-oss/proxy-monster/commit/5f307b3f3ef877d790cd0224af6cce0d149e4503))
+
 ## [0.1.6](https://github.com/ridi-oss/proxy-monster/compare/server-v0.1.5...server-v0.1.6) (2026-08-03)
 
 
