@@ -53,7 +53,7 @@ class NotificationServiceDbTest {
         transport = FakeTransport()
         svc = NotificationService(
             store = store,
-            recipients = RecipientResolver(fx.authz, fx.roleResolver) { emptyList() },
+            recipients = RecipientResolver(fx.authz, fx.roleResolver, { emptyList() }) { emptyList() },
             transports = listOf(transport),
             accessStore = fx.accessStore,
             queryResultStore = null,
@@ -125,7 +125,7 @@ class NotificationServiceDbTest {
     private fun serviceWith(disclosure: StatementDisclosure, candidates: List<String> = emptyList()) =
         NotificationService(
             store = store,
-            recipients = RecipientResolver(fx.authz, fx.roleResolver) { candidates },
+            recipients = RecipientResolver(fx.authz, fx.roleResolver, { emptyList() }) { candidates },
             transports = listOf(transport),
             accessStore = fx.accessStore,
             queryResultStore = null,
@@ -332,7 +332,7 @@ class NotificationServiceDbTest {
 
         val svcWithResults = NotificationService(
             store = store,
-            recipients = RecipientResolver(fx.authz, fx.roleResolver) { emptyList() },
+            recipients = RecipientResolver(fx.authz, fx.roleResolver, { emptyList() }) { emptyList() },
             transports = listOf(transport),
             accessStore = fx.accessStore,
             queryResultStore = resultStore,

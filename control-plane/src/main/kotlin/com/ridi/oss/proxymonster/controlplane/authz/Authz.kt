@@ -240,6 +240,15 @@ private fun datasourceEntity(
     return Entity(dsEuid, mapOf("name" to PrimString(name)), parents)
 }
 
+/** The Datasource parent a single-resource decision resolves against, followed by the Tag entities that
+ *  datasource carries. Both are needed: the parent edge is what makes `resource in Tag::"…"` reachable from a
+ *  Request, and Cedar's store has to contain every entity an edge points at. */
+private fun datasourceParent(dsEuid: EntityUID, name: String, tags: List<String>): List<Entity> {
+    val tagEuids = HashMap<String, EntityUID>()
+    val dsEntity = datasourceEntity(dsEuid, name, tags, tagEuids)
+    return listOf(dsEntity) + tagEuids.values.map { Entity(it) }
+}
+
 /** Collapse entities sharing an EUID to one (first wins) — cedar-java rejects a set containing two
  *  distinct [Entity] objects for the same [EntityUID] outright ("duplicate entity entry"), even when
  *  they're structurally identical placeholders (`Entity(euid)`). */
@@ -392,8 +401,9 @@ class Authz(
         resource: AuthzResource,
         knownChannel: String? = null,
         unknownContextKeys: Set<String> = emptySet(),
+        datasourceTags: List<String> = emptyList(),
     ): SatisfiableVerdict {
-        val (resourceEntity, auxEntities) = marshalResource(resource)
+        val (resourceEntity, auxEntities) = marshalResource(resource, datasourceTags)
         val request = marshal(principal, roles, auxEntities)
         val context = buildMap<String, Value> {
             knownChannel?.let { put("channel", PrimString(it)) }
@@ -429,8 +439,9 @@ class Authz(
         action: AuthzAction,
         resource: AuthzResource,
         context: AuthzContext = AuthzContext(),
+        datasourceTags: List<String> = emptyList(),
     ): AuthzDecision {
-        val (resourceEntity, auxEntities) = marshalResource(resource)
+        val (resourceEntity, auxEntities) = marshalResource(resource, datasourceTags)
         val request = marshal(principal, roles, auxEntities)
         return engine.isAuthorized(request, ACTION_TYPE.of(action.cedarId), resourceEntity, context.toCedarMap()).toAuthzDecision()
     }
@@ -438,7 +449,16 @@ class Authz(
     // The focal resource entity a single-resource decision evaluates, plus any auxiliary parent entities it
     // resolves against (a scoping datasource/role). The engine reads the focal EUID off the entity and splices
     // it into the actor graph, so — unlike the batch gates — the resource is never threaded as a bare EUID.
-    private fun marshalResource(resource: AuthzResource): Pair<Entity, List<Entity>> = when (resource) {
+    //
+    // [datasourceTags] are the tags of the datasource a Request/AccessGrant is scoped to, attached to that
+    // Datasource parent exactly as the batch gates attach them (see [datasourceEntity]). Without them a
+    // tag-scoped policy cannot decide a task: `resource in Tag::"…"` reaches a Column through its Datasource
+    // parent, so it must reach a Request through the same edge or a forbid written that way silently matches
+    // nothing. Empty for a resource with no datasource in scope, which is every other branch here.
+    private fun marshalResource(
+        resource: AuthzResource,
+        datasourceTags: List<String> = emptyList(),
+    ): Pair<Entity, List<Entity>> = when (resource) {
         AuthzResource.System -> Entity(SYSTEM_TYPE.of("system")) to emptyList()
 
         is AuthzResource.AuditRecord ->
@@ -457,7 +477,7 @@ class Authz(
             if (resource.datasourceName != null) {
                 val dsEuid = DATASOURCE_TYPE.of(resource.datasourceName)
                 parents += dsEuid
-                extraEntities += Entity(dsEuid)
+                extraEntities += datasourceParent(dsEuid, resource.datasourceName, datasourceTags)
             }
             if (resource.roleName != null) {
                 val roleEuid = ROLE_TYPE.of(resource.roleName)
@@ -480,7 +500,7 @@ class Authz(
             if (resource.datasourceName != null) {
                 val dsEuid = DATASOURCE_TYPE.of(resource.datasourceName)
                 parents += dsEuid
-                extraEntities += Entity(dsEuid)
+                extraEntities += datasourceParent(dsEuid, resource.datasourceName, datasourceTags)
             }
             if (resource.roleName != null) {
                 val roleEuid = ROLE_TYPE.of(resource.roleName)
@@ -813,6 +833,11 @@ fun Authz.resolveContextTags(
  * [raw] UNCHANGED: `requesterIp` (and any other raw signal) still reaches Cedar, but `tags` stays empty —
  * fail-closed, since a tag-conditioned policy then simply doesn't fire, never "invents" a tag from a fabricated
  * resource. No sentinel/pseudo-datasource is ever synthesized to route around this.
+ *
+ * [datasourceTags] serve both passes: pass-1 evaluates the tag rules against a Datasource carrying them, and
+ * pass-2 attaches them to the [resource]'s own Datasource parent (see `marshalResource`). Both are required —
+ * a `context.tag` rule and a `resource in Tag::"…"` policy are different mechanisms, and a task decision has
+ * to answer to either one.
  */
 internal fun Authz.authorizeWithContext(
     principal: String,
@@ -828,7 +853,7 @@ internal fun Authz.authorizeWithContext(
     } else {
         raw.copy(tags = resolveContextTags(principal, roles, datasourceName, raw, datasourceTags))
     }
-    return authorizeAs(principal, roles, action, resource, context)
+    return authorizeAs(principal, roles, action, resource, context, datasourceTags)
 }
 
 /**

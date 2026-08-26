@@ -162,7 +162,7 @@ class SlackNotificationE2eDbTest {
         val transport = SlackTransport(http, "xoxb-e2e", "https://console.example", NotificationRenderer(), api = slack.apiBase)
         svc = NotificationService(
             store = NotificationStore(fx.dataSource),
-            recipients = RecipientResolver(core.authz, core.roleResolver) { listOf(approver) },
+            recipients = RecipientResolver(core.authz, core.roleResolver, { emptyList() }) { listOf(approver) },
             transports = listOf(transport),
             accessStore = core.accessStore,
             queryResultStore = resultStore,
@@ -381,7 +381,7 @@ class SlackNotificationE2eDbTest {
     fun `under full a pending approver sees even a flagged statement`() = testApplication {
         val fullSvc = NotificationService(
             store = NotificationStore(fx.dataSource),
-            recipients = RecipientResolver(core.authz, core.roleResolver) { listOf(approver) },
+            recipients = RecipientResolver(core.authz, core.roleResolver, { emptyList() }) { listOf(approver) },
             transports = listOf(SlackTransport(http, "xoxb-e2e", "https://console.example", NotificationRenderer(), api = slack.apiBase)),
             accessStore = core.accessStore,
             queryResultStore = resultStore,
@@ -416,7 +416,7 @@ class SlackNotificationE2eDbTest {
     fun `a self-approving requester gets both the approver message and their own receipt over Slack`() {
         val selfSvc = NotificationService(
             store = NotificationStore(fx.dataSource),
-            recipients = RecipientResolver(core.authz, core.roleResolver) { listOf(approver) },
+            recipients = RecipientResolver(core.authz, core.roleResolver, { emptyList() }) { listOf(approver) },
             transports = listOf(SlackTransport(http, "xoxb-e2e", "https://console.example", NotificationRenderer(), api = slack.apiBase)),
             accessStore = core.accessStore,
             queryResultStore = resultStore,

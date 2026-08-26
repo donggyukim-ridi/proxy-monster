@@ -37,7 +37,11 @@ class AuthzSatisfiableTest {
         roles: Set<String>,
         channel: String? = null,
         unknown: Set<String> = emptySet(),
-    ) = satisfiableAs("bob@example.com", roles, approve, resource, knownChannel = channel, unknownContextKeys = unknown)
+        datasourceTags: List<String> = emptyList(),
+    ) = satisfiableAs(
+        "bob@example.com", roles, approve, resource,
+        knownChannel = channel, unknownContextKeys = unknown, datasourceTags = datasourceTags,
+    )
 
     @Test
     fun `an unconditional permit is ALLOWED regardless of the unknowns`() {
@@ -112,6 +116,32 @@ class AuthzSatisfiableTest {
             SatisfiableVerdict.POSSIBLE,
             authz.verdict(setOf("approver"), unknown = setOf("requester_ip")),
             "the forbid is undecided under an unknown address; treating it as a deny would skip a real approver",
+        )
+    }
+
+    /** Routing has to supply the datasource's tags for the same reason the approve route does: entity
+     *  membership is decided against the store, never left symbolic, so `resource in Tag::"…"` over a
+     *  Datasource with no tags is definitively false and the permit is IMPOSSIBLE. Passing them makes the
+     *  same policy satisfiable. The failure direction matters — IMPOSSIBLE means the candidate is skipped, so
+     *  a caller that omits the tags announces a tag-scoped approval to nobody. */
+    @Test
+    fun `a tag-scoped permit is IMPOSSIBLE without the datasource's tags and satisfiable with them`() {
+        val authz = authz(
+            """permit(principal in Role::"approver", action == Action::"task.approve", resource) when { resource in Tag::"service:alpha" };""",
+        )
+        assertEquals(
+            SatisfiableVerdict.IMPOSSIBLE,
+            authz.verdict(setOf("approver"), unknown = setOf("requester_ip")),
+            "no tags on the Datasource parent, so the permit's when clause cannot hold",
+        )
+        assertEquals(
+            SatisfiableVerdict.ALLOWED,
+            authz.verdict(
+                setOf("approver"),
+                unknown = setOf("requester_ip"),
+                datasourceTags = listOf("service:alpha", "system:production"),
+            ),
+            "the same candidate and the same policy, now reachable",
         )
     }
 }

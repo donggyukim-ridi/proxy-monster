@@ -18,6 +18,11 @@ import org.slf4j.LoggerFactory
 class RecipientResolver(
     private val authz: Authz,
     private val roleResolver: RoleResolver,
+    // Required, not defaulted: routing has to ask the same question the approve route asks, and a
+    // tag-scoped permit is unsatisfiable against a Datasource with no tags on it. Defaulting this to empty
+    // would let a caller silently route as though no policy were tag-scoped, which skips every eligible
+    // approver instead of over-notifying — the one direction this class must never fail in.
+    private val datasourceTagsFor: (AccessRequest) -> List<String>,
     private val candidateSource: () -> List<String>,
 ) {
     private val log = LoggerFactory.getLogger(RecipientResolver::class.java)
@@ -35,6 +40,7 @@ class RecipientResolver(
 
     private fun approverCandidates(req: AccessRequest): Set<String> {
         val resource = req.toApprovalResource()
+        val datasourceTags = datasourceTagsFor(req)
         return candidateSource()
             .filter { candidate ->
                 authz.satisfiableAs(
@@ -48,6 +54,9 @@ class RecipientResolver(
                     // candidate who could in fact approve. The click runs the real decision with concrete values.
                     knownChannel = null,
                     unknownContextKeys = setOf("channel", "requester_ip", "tags"),
+                    // The datasource's OWN tags, which are known here and are not the derived context tags
+                    // marked unknown above. A tag-scoped approval permit needs them to be satisfiable at all.
+                    datasourceTags = datasourceTags,
                 ) != SatisfiableVerdict.IMPOSSIBLE
             }
             .toSet()

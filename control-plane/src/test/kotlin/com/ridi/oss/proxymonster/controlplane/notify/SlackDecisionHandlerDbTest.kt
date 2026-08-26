@@ -44,7 +44,7 @@ class SlackDecisionHandlerDbTest {
 
         val notifications = NotificationService(
             store = NotificationStore(fx.dataSource),
-            recipients = RecipientResolver(fx.authz, fx.roleResolver) { emptyList() },
+            recipients = RecipientResolver(fx.authz, fx.roleResolver, { emptyList() }) { emptyList() },
             transports = listOf(FakeTransport()),
             accessStore = fx.accessStore,
             queryResultStore = null,

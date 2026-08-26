@@ -49,7 +49,11 @@ fun Application.installNotifications(
 
     val notifications = NotificationService(
         store = NotificationStore(dataSource),
-        recipients = RecipientResolver(authz, roleResolver) { roleResolver.listActivePrincipals() },
+        recipients = RecipientResolver(
+            authz,
+            roleResolver,
+            { req -> req.datasourceId?.let(datasourceStore::getIncludingDeleted)?.tags.orEmpty() },
+        ) { roleResolver.listActivePrincipals() },
         transports = transports,
         accessStore = accessStore,
         queryResultStore = queryResultStore,

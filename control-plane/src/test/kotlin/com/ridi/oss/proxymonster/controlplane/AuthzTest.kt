@@ -275,4 +275,43 @@ class AuthzTest {
         )
         assertIs<AuthzDecision.Deny>(other)
     }
+
+    /** Regression: a task decision must see its datasource's TAGS, not just its name. `resource in Tag::"…"`
+     *  reaches a Column through its Datasource parent, so the same term has to reach a Request through that
+     *  same edge. With the Datasource attached as a bare placeholder the `when` clause is unsatisfiable, and a
+     *  tag-scoped forbid matches nothing at all — a policy that validates, reads correctly, and protects no
+     *  one. That is the failure mode `validate_policy` cannot see, so it is pinned here. */
+    @Test
+    fun `a tag-scoped forbid decides a task — the Request's Datasource parent carries its tags`() {
+        val engine = CedarEngine(
+            listOf(
+                1L to """permit(principal, action == Action::"task.assume", resource);""",
+                2L to """forbid(principal, action == Action::"task.assume", resource) when { resource in Tag::"service:alpha" } unless { principal in Role::"service:alpha" };""",
+            ),
+        )
+        val roleSource = RoleSource { principal -> if (principal == "holder") setOf("service:alpha") else emptySet() }
+        val authz = Authz(engine, CedarPolicyStore(UnusedDataSource), roleSource)
+        val request = AuthzResource.ApprovalRequest(requester = "outsider", datasourceName = "alpha-mysql")
+        val tags = listOf("service:alpha", "system:production")
+
+        // The fence bites: the permit above would otherwise allow this outright.
+        assertIs<AuthzDecision.Deny>(
+            authz.authorizeAs("outsider", emptySet(), AuthzAction.TASK_ASSUME, request, datasourceTags = tags),
+        )
+        // ... and the role holder passes it, so the deny above comes from the fence and not from
+        // deny-by-default.
+        assertEquals(
+            AuthzDecision.Allow,
+            authz.authorizeAs("holder", setOf("service:alpha"), AuthzAction.TASK_ASSUME, request, datasourceTags = tags),
+        )
+        // A datasource that does not carry the tag is left alone: the tags are the request's, not ambient.
+        assertEquals(
+            AuthzDecision.Allow,
+            authz.authorizeAs(
+                "outsider", emptySet(), AuthzAction.TASK_ASSUME,
+                AuthzResource.ApprovalRequest(requester = "outsider", datasourceName = "beta-mysql"),
+                datasourceTags = listOf("service:beta", "system:production"),
+            ),
+        )
+    }
 }

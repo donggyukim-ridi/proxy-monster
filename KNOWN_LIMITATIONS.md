@@ -361,6 +361,16 @@ tagging, table detail) and never feeds an enforcement decision.
   intended behavior (the approver, not the requester, is accountable for the
   run) is unresolved — flagged here rather than silently decided. Detail:
   [`docs/task-execution.md`](./docs/task-execution.md).
+- 🟢 Task listings decide `task.read` without their datasource's tags. A task or
+  grant decision carries the tags of the datasource it is scoped to, so a
+  tag-scoped policy governs it (`Authz.marshalResource`). The two listing routes
+  are the exception: `/api/access-requests` and `/api/access-grants` filter row
+  by row through `Authz.authorize` with no tags, because resolving them per row
+  would be one catalog read per row. So a tag-scoped `task.read` forbid narrows
+  a single task fetch but not the listing that enumerates it. Metadata only —
+  status, timestamps, and the requested role, never result rows, which
+  `task.assume` gates and which does carry the tags. Detail:
+  [`docs/approval-workflow.md`](./docs/approval-workflow.md).
 - 🟡 Open presets — curation is load-bearing. Under `system:development` (and
   the permit-by-default system posture), a data-reading system object that the
   shipped `system:` classification _forgets to tag_ is exposed. The curated

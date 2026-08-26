@@ -72,7 +72,7 @@ class RecipientResolverDbTest {
      *  principal who holds nothing is not, and the requester is the one known over-notification. */
     @Test
     fun `the resolver notifies approvers and skips a principal who holds nothing`() {
-        val resolver = RecipientResolver(fx.authz, fx.roleResolver) { candidates }
+        val resolver = RecipientResolver(fx.authz, fx.roleResolver, { emptyList() }) { candidates }
         val req = AccessRequest(
             id = 1, principal = requester, datasourceName = fx.datasource.name,
             requestedDurationSec = 0, status = "PENDING", createdAt = "",
