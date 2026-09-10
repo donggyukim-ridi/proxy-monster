@@ -38,6 +38,7 @@ type rawFlags struct {
 	TLSKeyPath             string `env:"PM_TLS_KEY"`
 	TLSNoAdvertise         string `env:"PM_TLS_NO_ADVERTISE"`
 	QueryTimeout           string `env:"PM_QUERY_TIMEOUT"`
+	TargetReadCommitted    string `env:"PM_TARGET_READ_COMMITTED"`
 }
 
 // parsePort turns a blank, non-numeric, or out-of-range value into 0, which Load() then replaces with the
@@ -81,6 +82,7 @@ type Config struct {
 	TargetDb               string
 	TargetUser             string
 	TargetPassword         string
+	TargetReadCommitted    bool
 	ControlPlaneGrpcTarget string
 	DatasourceName         string
 	DatasourceTags         []string
@@ -174,6 +176,7 @@ func Load(registry spi.Registry) (*Config, error) {
 		TargetDb:               raw.TargetDb,
 		TargetUser:             raw.TargetUser,
 		TargetPassword:         raw.TargetPassword,
+		TargetReadCommitted:    parseBoolEnv(raw.TargetReadCommitted),
 		ControlPlaneGrpcTarget: raw.ControlPlaneGrpcTarget,
 		// A whitespace-only value is absent, so Validate()/TLSEnabled() treat it as unset rather than a
 		// usable name/path.

@@ -3,6 +3,7 @@ package mysqlproxy
 import (
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -28,6 +29,10 @@ const (
 	targetDbPluginNative      = "mysql_native_password"
 	targetDbPluginCachingSHA2 = "caching_sha2_password"
 )
+
+// erUnknownSystemVariable is MySQL's error code for a SET naming a variable the server does not define.
+// diagcodes.go carries the same number for display; this one is control flow.
+const erUnknownSystemVariable = 1193
 
 // testHookCachingSHA2FullAuth, when non-nil, is invoked whenever the caching_sha2_password full-auth
 // exchange runs, with viaPublicKey reporting the plaintext RSA public-key branch (true) versus the TLS
@@ -113,6 +118,9 @@ func dialTargetDbAuthID(ctx context.Context, target spi.TargetDb, mirrorDeprecat
 		switch authPayload[0] {
 		case 0x00:
 			if err := enableSessionTracking(conn); err != nil {
+				return nil, 0, err
+			}
+			if err := applyReadCommitted(conn, target); err != nil {
 				return nil, 0, err
 			}
 			if err := conn.SetDeadline(time.Time{}); err != nil {
@@ -278,24 +286,57 @@ func enableSessionTracking(conn net.Conn) error {
 // execTargetDbSet sends one SET on the service-account connection and consumes its single OK packet, failing
 // on a target-DB error or a malformed response.
 func execTargetDbSet(conn net.Conn, sql string) error {
+	_, err := execTargetDbSetVar(conn, sql, false)
+	return err
+}
+
+// execTargetDbSetVar runs a SET on the target session and reports whether the server applied it. With
+// tolerateUnknown, ER_UNKNOWN_SYSTEM_VARIABLE reports (false, nil) rather than an error: for a setting that
+// exists on only one engine flavour, the variable being absent is the expected outcome elsewhere and must
+// not fail the connection. Every other error — including a failure to set a variable the server does
+// define — still fails it.
+func execTargetDbSetVar(conn net.Conn, sql string, tolerateUnknown bool) (bool, error) {
 	if err := mysqlwire.WritePacket(conn, 0, mysqlwire.ComQueryPayload(sql)); err != nil {
-		return err
+		return false, err
 	}
 	_, payload, err := mysqlwire.ReadPacketLimited(conn, maxTargetDbAuthPacket)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if len(payload) == 0 {
-		return errors.New("empty response")
+		return false, errors.New("empty response")
 	}
 	if payload[0] == 0xff {
-		return errors.New(mysqlwire.ErrString(payload))
+		if tolerateUnknown && len(payload) >= 3 && binary.LittleEndian.Uint16(payload[1:3]) == erUnknownSystemVariable {
+			return false, nil
+		}
+		return false, errors.New(mysqlwire.ErrString(payload))
 	}
 	if payload[0] != 0x00 {
-		return fmt.Errorf("unexpected response 0x%02x", payload[0])
+		return false, fmt.Errorf("unexpected response 0x%02x", payload[0])
 	}
 	if _, _, _, _, err := normalizeTargetDbOK(payload); err != nil {
-		return err
+		return false, err
+	}
+	return true, nil
+}
+
+// applyReadCommitted moves the freshly-authenticated target session to READ COMMITTED when the datasource
+// opted in.
+//
+// Order matters. An Aurora MySQL reader IGNORES the isolation level unless aurora_read_replica_read_committed
+// is ON in the same session, so the Aurora setting goes first and the isolation level second; reversing them
+// leaves the reader on REPEATABLE READ with no error to show for it. That setting does not exist on vanilla
+// MySQL, where its absence is the expected outcome and the isolation level alone is what takes effect.
+func applyReadCommitted(conn net.Conn, target spi.TargetDb) error {
+	if !target.ReadCommitted {
+		return nil
+	}
+	if _, err := execTargetDbSetVar(conn, "SET SESSION aurora_read_replica_read_committed = ON", true); err != nil {
+		return fmt.Errorf("enable target-DB reader read-committed: %w", err)
+	}
+	if err := execTargetDbSet(conn, "SET SESSION transaction_isolation = 'READ-COMMITTED'"); err != nil {
+		return fmt.Errorf("set target-DB transaction isolation: %w", err)
 	}
 	return nil
 }

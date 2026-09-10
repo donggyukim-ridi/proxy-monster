@@ -21,6 +21,11 @@ type TargetDb struct {
 	Db       string
 	User     string
 	Password string
+	// ReadCommitted opens the broker's target sessions under READ COMMITTED instead of the server default.
+	// Off unless the deployment asks for it: on an Aurora MySQL reader READ COMMITTED buys cheap undo
+	// retention by giving up repeatability WITHIN a single statement, which is the right trade for a
+	// long analytic scan and the wrong one for a query whose row counts must be exact.
+	ReadCommitted bool
 }
 
 // Identity is the authenticated wire identity retained for a client session.

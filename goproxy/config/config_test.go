@@ -55,6 +55,7 @@ func clearPMEnv(t *testing.T) {
 		"PM_PROXY_PORT", "PM_TARGET_PORT",
 		"PM_DATASOURCE_NAME", "PM_DATASOURCE_TAGS", "PM_SECRET_TOKEN",
 		"PM_TLS_CERT", "PM_TLS_KEY", "PM_ADVERTISE_ADDR", "PM_QUERY_TIMEOUT",
+		"PM_TARGET_READ_COMMITTED",
 	} {
 		t.Setenv(v, "")
 	}
@@ -171,6 +172,46 @@ func TestLoadQueryTimeoutOverride(t *testing.T) {
 	}
 	if cfg.QueryTimeout != 42*time.Second {
 		t.Errorf("QueryTimeout = %s, want 42s", cfg.QueryTimeout)
+	}
+}
+
+func TestLoadTargetReadCommitted(t *testing.T) {
+	// Unset must stay false: READ COMMITTED changes query semantics on a reader, so it is never inferred.
+	clearPMEnv(t)
+	cfg, err := Load(testRegistry())
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.TargetReadCommitted {
+		t.Error("TargetReadCommitted = true with PM_TARGET_READ_COMMITTED unset, want false")
+	}
+
+	for _, truthy := range []string{"1", "true", "TRUE", "yes", "on"} {
+		t.Run(truthy, func(t *testing.T) {
+			clearPMEnv(t)
+			t.Setenv("PM_TARGET_READ_COMMITTED", truthy)
+			cfg, err := Load(testRegistry())
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if !cfg.TargetReadCommitted {
+				t.Errorf("TargetReadCommitted = false for %q, want true", truthy)
+			}
+		})
+	}
+
+	for _, falsy := range []string{"", "0", "false", "no", "off", "garbage"} {
+		t.Run("not_"+falsy, func(t *testing.T) {
+			clearPMEnv(t)
+			t.Setenv("PM_TARGET_READ_COMMITTED", falsy)
+			cfg, err := Load(testRegistry())
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if cfg.TargetReadCommitted {
+				t.Errorf("TargetReadCommitted = true for %q, want false", falsy)
+			}
+		})
 	}
 }
 
