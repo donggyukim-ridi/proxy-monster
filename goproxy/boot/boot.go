@@ -61,11 +61,12 @@ func Run(registry spi.Registry) error {
 	provider := cfg.Provider
 	dbImpl := provider.NewDb()
 	targetDb := spi.TargetDb{
-		Host:     cfg.TargetHost,
-		Port:     cfg.TargetPort,
-		Db:       cfg.TargetDb,
-		User:     cfg.TargetUser,
-		Password: cfg.TargetPassword,
+		Host:          cfg.TargetHost,
+		Port:          cfg.TargetPort,
+		Db:            cfg.TargetDb,
+		User:          cfg.TargetUser,
+		Password:      cfg.TargetPassword,
+		ReadCommitted: cfg.TargetReadCommitted,
 	}
 
 	// Build the client-facing TLS config BEFORE registering, so the proxy can advertise the certificate chain

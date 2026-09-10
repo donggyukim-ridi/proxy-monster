@@ -156,6 +156,17 @@ configured per proxy under `PM_TARGET_*`.
   `acme`). In production set all five to the target DB this proxy fronts (VPC
   peering in the AWS layout below). Example: `prod-db.prod-vpc.internal` ·
   `5432` · `appdb` · `pmproxy`
+- `PM_TARGET_READ_COMMITTED` — _optional, default off_. Opens the proxy's target
+  sessions under `READ COMMITTED` instead of the server default. Enable it where
+  the proxy serves long analytic reads against a write-heavy database: a
+  long-running read under the default `REPEATABLE READ` holds a read view for
+  its whole lifetime, which blocks undo purge and grows the server's history
+  list. On Aurora MySQL the isolation level alone is not enough on a reader, so
+  the proxy also sets `aurora_read_replica_read_committed`; that variable does
+  not exist elsewhere and is skipped where it is absent. The trade is
+  repeatability: on an Aurora reader `READ COMMITTED` permits non-repeatable and
+  phantom reads _within a single statement_, so row counts and aggregates can
+  come back inconsistent. Leave it off for queries that must be exact.
 - `PM_CONTROL_PLANE_GRPC` — _optional_. CP gRPC address `host:port`. Default
   `localhost:9090`. Production example: `pm-cp.pm.internal:9090`
 - `PM_ADVERTISE_ADDR` — _optional, no default_. The client-facing `host:port` a
